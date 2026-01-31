@@ -1,0 +1,33 @@
+user1 -> GenericAll -> user2
+
+user1 -> GenericAll -> group1
+
+user1 -> GenericAll -> DC01$
+--------------------------------
+user2 -> GenericWrite -> user3
+
+user2 -> GenericWrite -> group2
+--------------------------------
+user3 -> WriteOwner -> user4
+
+user3 -> WriteOwner -> group3
+--------------------------------
+user4 -> WriteDACL -> user5
+
+user4 -> WriteDACL -> group4
+--------------------------------
+user5 -> AllExtendedRigts -> user6
+
+user5 -> AllExtendedRights -> group5
+--------------------------------
+user6 ->  WriteSPN -> user7
+
+-------------------------------
+user7 -> AddSelf -> group6
+
+-------------------------------
+user8 -> ReadGmsaPassword -> gmsa_svc$
+
+-------------------------------
+
+user9 -> memberof -> group7 -> genericall -> user10
