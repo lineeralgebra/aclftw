@@ -93,6 +93,12 @@ def decode_mask(mask):
 
     #if mask & 0x00000010:
         #rights.append("Write Property")
+    if mask & 0x00000020:
+        rights.append("Write Property (e.g., Member Add/Remove)")
+
+    # Standard GenericWrite check
+    if (mask & GENERIC_WRITE) or (mask & 0x20028):
+        rights.append("Generic Write")
 
     if mask & 0x00000001:
         rights.append("Create Child")
