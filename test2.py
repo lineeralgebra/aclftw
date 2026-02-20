@@ -1,4 +1,5 @@
-from ldap3 import Server, ALL, Connection, NTLM, SUBTREE
+import ssl
+from ldap3 import Server, ALL, Connection, NTLM, SUBTREE, Tls
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR, LDAP_SID, ACCESS_ALLOWED_OBJECT_ACE, ACCESS_ALLOWED_ACE
 from uuid import UUID
 from uuid import UUID
@@ -203,12 +204,17 @@ def main():
     parser.add_argument('-dc-ip', '--dc-ip', required=True, help='domain')
     parser.add_argument('-dc-fqdn', '--dc-fqdn', help='DC FQDN (helpful for Kerberos)')
     parser.add_argument('-H', '--hash', help='NTLM hash (for PTH)')
+    parser.add_argument('--ldaps', action='store_true', help='Use LDAPS')
 
     args = parser.parse_args()
     netbios = infer_netbios(args.domain)
     base_dn = domain_to_dn(args.domain)
 
-    server = Server(args.dc_ip, get_info=ALL)
+    if args.ldaps:
+        tls = Tls(validate=ssl.CERT_NONE)
+        server = Server(args.dc_ip, port=636, use_ssl=True, get_info=ALL, tls=tls)
+    else:
+        server = Server(args.dc_ip, get_info=ALL)
     try:
         if args.hash:
             lm = "aad3b435b51404eeaad3b435b51404ee"
