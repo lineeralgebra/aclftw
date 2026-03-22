@@ -50,10 +50,10 @@ class Session:
         return self.items[-1]
     def is_empty(self):
         return len(self.items) == 0
-    
+
     def size(self):
         return len(self.items)
-    
+
     def show_all(self):
         print("[bold magenta]--- Query History ---[/bold magenta]")
         for i, item in enumerate(self.items, 1):
@@ -73,12 +73,12 @@ class Queue:
     def is_empty(self):
         return len(self.items) == 0
     def size(self):
-        return len(self.items) 
+        return len(self.items)
 class DecisionNode:
     def __init__(self, question, left=None, right=None):
         self.question = question
         self.left = left
-        self.right = right      
+        self.right = right
 class TreeNode:
     def __init__(self, value):
         self.value = value
@@ -95,7 +95,7 @@ class SinglyLinkedList:
         return self.head is None
     def get_size(self):
         return self.size
-    
+
     def add(self, data):
         new_node = HistoryNode(data)
         if not self.head:
@@ -146,7 +146,7 @@ class SinglyLinkedList:
 
         if self.is_empty():
             raise IndexError("List is empty")
-        
+
         data = self.head.data
         self.head = self.head.next
         self.size -= 1
@@ -154,7 +154,7 @@ class SinglyLinkedList:
     def delete_at_end(self):
         if self.is_empty():
             raise IndexError("List is empty")
-        
+
         if self.head.next is None:
             data = self.head.data
             self.head = None
@@ -170,11 +170,11 @@ class SinglyLinkedList:
     def delete_by_value(self, value):
         if self.is_empty():
             raise IndexError("List is empty")
-        
+
         if self.head.data == value:
             self.delete_all_beginning()
             return True
-        
+
         current = self.head
         while current.next:
             if current.next.data == value:
@@ -183,7 +183,7 @@ class SinglyLinkedList:
                 return True
             current = current.next
         return False
-    
+
     def search(self, value):
         current = self.head
         position = 0
@@ -194,11 +194,11 @@ class SinglyLinkedList:
             current = current.next
             position += 1
         return -1
-    
+
     def display(self):
         if self.is_empty():
             return "Empty List"
-        
+
         current = self.head
         elements = []
 
@@ -234,7 +234,7 @@ class SessionManager:
         return len(self.queue) - 1
     def get_session(self, index):
         return self.queue[index]
-        
+
 class BSTNode:
     def __init__(self, username, data=None):
         self.key = username.lower()
@@ -276,12 +276,12 @@ class UserCacheBST:
             else:
                 curr = curr.right
         return None
-         
+
 
 
 def show_menu():
     print("""
-    Available Commands : 
+    Available Commands :
     connect <username> <password> <domain> <dc_ip> - Connect to AD
     connectssl <username> <password> <domain> <dc_ip> - Connect to AD via SSL
     connect_hash <username> <nthash> <domain> <dc_ip> - Connect using NT Hash
@@ -325,12 +325,12 @@ def check_connection(tree, connected):
         print(f" -> [bold red]No[/bold red]: {tree.left.question}")
 
 def batch_lookup(conn, base_dn):
-    
+
     priority_map = {"administrator": 1, "krbtgt": 1, "guest": 3}
 
     users = ["osman", "mark", "Administrator", "guest", "irem", "krbtgt"]
     pq = []
-    
+
     for u in users:
         priority = priority_map.get(u.lower(), 2)
         heapq.heappush(pq, (priority, u))
@@ -385,7 +385,7 @@ def build_category_tree(conn, base_dn):
     return root
 
 def print_categories(root):
-    
+
     for category in root.children:
         print(f"\n[bold cyan]{category.value}[/bold cyan]")
 
@@ -451,16 +451,16 @@ def list_groups_bfs(conn, base_dn):
         name = str(entry.cn)
         members = entry.member.values if "member" in entry else []
         groups[name] = members
-    
+
     for group in groups:
         print(f"\n[bold cyan]{group}[/bold cyan]")
         queue = Queue()
         # enmque first level members
         for m in groups[group]:
             queue.enqueue(m)
-        
+
         while not queue.is_empty():
-            
+
             member = queue.dequeue()
 
             # resolve to friendly name (handles both DN and SID)
@@ -486,10 +486,10 @@ def list_users(conn, base_dn):
             user_cache.insert(user, str(entry))
 
             desc = ""
-        
+
             if "description" in entry:
                 desc = str(entry.description)
-            print(f"[bold yellow]{user} - {desc}[/bold yellow]") 
+            print(f"[bold yellow]{user} - {desc}[/bold yellow]")
 
             outfile.write(user + "\n")
     print(f"[+] {len(conn.entries)} usernames saved to usernames.txt")
@@ -503,7 +503,7 @@ def list_computers(conn, base_dn):
         comp = str(entry.sAMAccountName)
         dnshostname = str(entry.dNSHostname)
         operatingsystem = str(entry.operatingSystem)
-        print(f"[bold red]{comp} - {dnshostname} - {operatingsystem}[/bold red]") 
+        print(f"[bold red]{comp} - {dnshostname} - {operatingsystem}[/bold red]")
 
 def add_member(conn, base_dn, group_name, user_name):
     # get user DN
@@ -512,11 +512,11 @@ def add_member(conn, base_dn, group_name, user_name):
     if not conn.entries:
         print("User not found")
         return
-    
+
     user_dn = conn.entries[0].distinguishedName.value
     # get group DN
     conn.search(base_dn, f"(sAMAccountName={group_name})", attributes=["distinguishedName"])
-    
+
     if not conn.entries:
         print("Group not found")
         return
@@ -564,7 +564,7 @@ def save_password(password):
     if password in existing:
         print("[bold yellow][!] Password already in list[/bold yellow]")
         return
-    
+
     with open(filename, "a") as f:
         f.write(password + "\n")
 
@@ -589,7 +589,7 @@ def connect(connection):
             prompt = f"ldap({current_session['username']}@{current_session['ip']})> "
         else:
             prompt = "shell> "
-        
+
         try:
             command = shlex.split(input(prompt).strip())
         except ValueError:
@@ -606,7 +606,7 @@ def connect(connection):
             password = command[2]
             domain = command[3]
             dc_ip = command[4]
-            
+
             netbios = infer_netbios(domain)
             base_dn = domain_to_dn(domain)
             try:
@@ -635,12 +635,12 @@ def connect(connection):
             dc_ip = command[4]
             netbios = infer_netbios(domain)
             base_dn = domain_to_dn(domain)
-            
+
             if ":" not in nthash:
                 password = f"aad3b435b51404eeaad3b435b51404ee:{nthash}"
             else:
                 password = nthash
-                
+
             try:
                 server = Server(dc_ip, get_info=ALL)
                 conn = Connection(server, user=f"{netbios}\\{username}", password=password, authentication=NTLM, auto_bind=True)
@@ -705,7 +705,7 @@ def connect(connection):
             if len(command) < 2:
                 print("query <username>")
                 continue
-            
+
             username = command[1]
             try:
                 conn = current_session["conn"]
@@ -796,7 +796,7 @@ def connect(connection):
             if not current_session:
                 print("No active session! Please 'use' a session or 'connect' first.")
                 continue
-            
+
             target_username = current_session.get("username")
             import argparse
             args = argparse.Namespace()
@@ -820,36 +820,78 @@ def connect(connection):
                 print("setpass <user> <newpassword>")
                 continue
 
-            username = command[1]
+            target_user = command[1]
             newpass = command[2]
 
-            conn = current_session["conn"]
-            base_dn = current_session["base_dn"]
+            # Use SAMR protocol over SMB (port 445) - no SSL needed
+            try:
+                from impacket.dcerpc.v5 import samr, transport
 
-            # AD requires LDAPS or TLS for password changes
-            if not current_session.get("ldaps", False):
-                try:
-                    conn.server.tls = Tls(validate=ssl.CERT_NONE)
-                    conn.start_tls(read_server_info=False)
-                    current_session["ldaps"] = True
-                    print("[+] Connection upgraded to TLS for password change")
-                except Exception as e:
-                    print("[-] Failed to upgrade connection to TLS. Please use 'connectssl' instead to change passwords.")
+                dc_ip = current_session["ip"]
+                domain = current_session["domain"]
+                sess_user = current_session["username"]
+                sess_pass = current_session["password"]
+                nthash = current_session.get("nthash", "")
+
+                # Set up NTLM hashes for impacket
+                lmhash = ""
+                if nthash:
+                    lmhash = "aad3b435b51404eeaad3b435b51404ee"
+                    auth_pass = ""
+                else:
+                    auth_pass = sess_pass
+
+                # Connect to SAMR over SMB (port 445)
+                rpctransport = transport.SMBTransport(dc_ip, filename=r'\samr')
+                rpctransport.set_credentials(sess_user, auth_pass, domain, lmhash, nthash)
+                dce = rpctransport.get_dce_rpc()
+                dce.connect()
+                dce.bind(samr.MSRPC_UUID_SAMR)
+
+                # Open the server and domain
+                resp = samr.hSamrConnect(dce)
+                server_handle = resp['ServerHandle']
+
+                resp = samr.hSamrEnumerateDomainsInSamServer(dce, server_handle)
+                domains = resp['Buffer']['Buffer']
+
+                # Find the domain (not Builtin)
+                domain_name = None
+                for d in domains:
+                    if d['Name'].lower() != 'builtin':
+                        domain_name = d['Name']
+                        break
+
+                if not domain_name:
+                    print("[-] Could not find domain")
                     continue
 
-            conn.search(base_dn,f"(sAMAccountName={username})",attributes=["distinguishedName"])
+                resp = samr.hSamrLookupDomainInSamServer(dce, server_handle, domain_name)
+                domain_sid = resp['DomainId']
 
-            if not conn.entries:
-                print("User not found")
-                continue
+                resp = samr.hSamrOpenDomain(dce, server_handle, domainId=domain_sid)
+                domain_handle = resp['DomainHandle']
 
-            user_dn = conn.entries[0].distinguishedName.value
+                # Look up the target user
+                resp = samr.hSamrLookupNamesInDomain(dce, domain_handle, [target_user])
+                user_rid = resp['RelativeIds']['Element'][0]['Data']
 
-            pwd = f'"{newpass}"'.encode("utf-16-le")
+                resp = samr.hSamrOpenUser(dce, domain_handle, samr.USER_FORCE_PASSWORD_CHANGE | samr.USER_READ_GENERAL, userId=user_rid)
+                user_handle = resp['UserHandle']
 
-            conn.modify(user_dn,{"unicodePwd": [(MODIFY_REPLACE, [pwd])]})
+                # Force-reset the password using hSamrSetNTInternal1
+                # This handles all session-key crypto automatically
+                samr.hSamrSetNTInternal1(dce, user_handle, newpass)
 
-            print(conn.result)
+                print(f"[+] Password changed successfully for {target_user}")
+
+                samr.hSamrCloseHandle(dce, user_handle)
+                samr.hSamrCloseHandle(dce, domain_handle)
+                samr.hSamrCloseHandle(dce, server_handle)
+                dce.disconnect()
+
+            except Exception as e:
+                print(f"[-] Failed to change password: {e}")
 
         elif command[0] == "savepassword":
 
