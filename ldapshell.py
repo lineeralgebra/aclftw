@@ -19,7 +19,8 @@ COMMANDS = [
     "connect", "connectssl", "connect_hash", "disconnect", "use",
     "sessions", "status", "query", "history", "batch_lookup",
     "categories", "groups", "users", "computers", "kerberoasting", "checkacl", "addmember",
-    "setpass", "help", "exit", "savepassword", "show_all_history", "offline_search", "shares"
+    "setpass", "help", "exit", "savepassword", "show_all_history", "offline_search", "shares",
+    "get_sid"
 ]
 
 def shell_completer(text, state):
@@ -307,6 +308,7 @@ def show_menu():
                    Download from share   - shares <target_ip> <share> get <file>
                    Upload to share       - shares <target_ip> <share> put <file>
                    Tip: use quotes for multi-word shares e.g. "Department Shares"
+    get_sid      - Get user's SID       - get_sid <username>
     savepassword - Save a password      - savepassword <password>
     show_all_history - Show all query history
     help         - Menu
@@ -552,6 +554,33 @@ def kerberoastable(conn, base_dn):
         if "servicePrincipalName" in entry:
             spn = str(entry.servicePrincipalName)
         print(f"[bold red] {user} - {spn}[/bold red]")
+
+def sid_to_string(binary_sid):
+    """Convert a binary SID (bytes) to its string representation S-1-5-21-..."""
+    if isinstance(binary_sid, str):
+        return binary_sid
+    revision = binary_sid[0]
+    sub_authority_count = binary_sid[1]
+    authority = int.from_bytes(binary_sid[2:8], byteorder='big')
+    subs = []
+    for i in range(sub_authority_count):
+        offset = 8 + i * 4
+        subs.append(int.from_bytes(binary_sid[offset:offset+4], byteorder='little'))
+    return f"S-{revision}-{authority}-" + "-".join(str(s) for s in subs)
+
+def get_sid(conn, base_dn, username):
+    """Retrieve and display the SID for a given user."""
+    conn.search(base_dn, f"(sAMAccountName={username})", attributes=["objectSid", "sAMAccountName", "distinguishedName"])
+    if not conn.entries:
+        print(f"[bold red][-] User '{username}' not found[/bold red]")
+        return
+    entry = conn.entries[0]
+    raw_sid = entry["objectSid"].raw_values[0]
+    sid_str = sid_to_string(raw_sid)
+    print(f"\n[bold cyan]SID for {username}[/bold cyan]")
+    print(f"[bold yellow]  User : {entry.sAMAccountName}[/bold yellow]")
+    print(f"[bold yellow]  DN   : {entry.distinguishedName}[/bold yellow]")
+    print(f"[bold green]  SID  : {sid_str}[/bold green]")
 
 def save_password(password):
     filename = "passwords.txt"
@@ -979,6 +1008,18 @@ def connect(connection):
             #     )
             # except Exception as e:
             #     print(f"[-] Error enumerating shares: {e}")
+
+        elif command[0] == "get_sid":
+            if not current_session:
+                print("No active session! Please 'use' a session or 'connect' first.")
+                continue
+            if len(command) < 2:
+                print("get_sid <username>")
+                continue
+            try:
+                get_sid(current_session["conn"], current_session["base_dn"], command[1])
+            except Exception as e:
+                print(f"[-] Error getting SID: {e}")
 
         elif command[0] == "exit":
             break
