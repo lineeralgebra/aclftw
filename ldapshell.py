@@ -16,12 +16,37 @@ if os.path.exists(histfile):
     readline.read_history_file(histfile)
 
 atexit.register(readline.write_history_file, histfile)
+UAC_FLAGS = {
+    "SCRIPT": 0x00000001,
+    "ACCOUNTDISABLE": 0x00000002,
+    "HOMEDIR_REQUIRED": 0x00000008,
+    "LOCKOUT": 0x00000010,
+    "PASSWD_NOTREQD": 0x00000020,
+    "PASSWD_CANT_CHANGE": 0x00000040,
+    "ENCRYPTED_TEXT_PWD_ALLOWED": 0x00000080,
+    "TEMP_DUPLICATE_ACCOUNT": 0x00000100,
+    "NORMAL_ACCOUNT": 0x00000200,
+    "INTERDOMAIN_TRUST_ACCOUNT": 0x00000800,
+    "WORKSTATION_TRUST_ACCOUNT": 0x00001000,
+    "SERVER_TRUST_ACCOUNT": 0x00002000,
+    "DONT_EXPIRE_PASSWORD": 0x00010000,
+    "MNS_LOGON_ACCOUNT": 0x00020000,
+    "SMARTCARD_REQUIRED": 0x00040000,
+    "TRUSTED_FOR_DELEGATION": 0x00080000,
+    "NOT_DELEGATED": 0x00100000,
+    "USE_DES_KEY_ONLY": 0x00200000,
+    "DONT_REQ_PREAUTH": 0x00400000,
+    "PASSWORD_EXPIRED": 0x00800000,
+    "TRUSTED_TO_AUTH_FOR_DELEGATION": 0x01000000,
+    "PARTIAL_SECRETS_ACCOUNT": 0x04000000
+}
+
 COMMANDS = [
     "connect", "connectssl", "connect_hash", "disconnect", "use",
     "sessions", "status", "query", "history", "batch_lookup",
     "categories", "groups", "users", "computers", "kerberoasting", "checkacl", "addmember",
     "setpass", "help", "exit", "savepassword", "show_all_history", "offline_search", "shares",
-    "get_sid", "getgmsa", "setowner", "genericall"
+    "get_sid", "getgmsa", "setowner", "genericall", "adduac", "rmuac"
 ]
 
 def shell_completer(text, state):
@@ -544,6 +569,48 @@ def set_password(conn, user_dn, new_password):
         print("[+] Password changed")
     else:
         print("[-] Failed:", conn.result)
+
+def modify_uac(conn, base_dn, target_user, flag_name, action="add"):
+    if flag_name not in UAC_FLAGS:
+        print(f"[bold red][-] Unknown UAC flag:[/bold red] {flag_name}")
+        print(f"[bold yellow]Available flags:[/bold yellow] {', '.join(UAC_FLAGS.keys())}")
+        return
+
+    flag_val = UAC_FLAGS[flag_name]
+    
+    conn.search(base_dn, f"(sAMAccountName={target_user})", attributes=['userAccountControl', 'distinguishedName'])
+    if not conn.entries:
+        print(f"[bold red][-] Could not find target user {target_user}[/bold red]")
+        return
+        
+    entry = conn.entries[0]
+    target_dn = entry.distinguishedName.value
+    
+    if "userAccountControl" not in entry or entry.userAccountControl.value is None:
+        print("[bold red][-] Target does not have a userAccountControl attribute.[/bold red]")
+        return
+        
+    current_uac = entry.userAccountControl.value
+    
+    if action == "add":
+        if current_uac & flag_val:
+            print(f"[bold yellow][!] User already has {flag_name} flag set.[/bold yellow]")
+            return
+        new_uac = current_uac | flag_val
+    elif action == "remove":
+        if not (current_uac & flag_val):
+            print(f"[bold yellow][!] User does not have {flag_name} flag set.[/bold yellow]")
+            return
+        new_uac = current_uac & ~flag_val
+        
+    changes = {'userAccountControl': [(MODIFY_REPLACE, [new_uac])]}
+    conn.modify(target_dn, changes)
+    
+    if conn.result["result"] == 0:
+        print(f"[bold green][+] Successfully {action}ed {flag_name} UAC flag for {target_user}[/bold green]")
+    else:
+        print(f"[bold red][-] Failed to {action} UAC flag: {conn.result['description']}[/bold red]")
+
 def cmd_setowner(conn, base_dn, target_user, sess_user):
     print(f"[*] Attempting to set owner of '{target_user}' to '{sess_user}'")
 
@@ -897,7 +964,12 @@ def connect(connection):
                 base_dn = current_session["base_dn"]
                 conn.search(base_dn, f"(sAMAccountName={username})", attributes=["cn", "memberOf", "userAccountControl", "userPrincipalName", "objectSid"])
                 if conn.entries:
-                    print(conn.entries[0])
+                    entry = conn.entries[0]
+                    print(entry)
+                    if "userAccountControl" in entry and entry.userAccountControl.value is not None:
+                        uac_val = entry.userAccountControl.value
+                        flags = [name for name, val in UAC_FLAGS.items() if uac_val & val]
+                        print(f"\n[bold cyan]UserAccountControl Flags:[/bold cyan] {', '.join(flags)} ({uac_val})")
                     history.push(username)
                 else:
                     print("User not found...")
@@ -1292,6 +1364,28 @@ def connect(connection):
                 cmd_genericall(current_session["conn"], current_session["base_dn"], target, session_username)
             except Exception as e:
                 print(f"[-] Error adding Genericall: {e}")
+        elif command[0] == "adduac":
+            if not current_session:
+                print("No active session! Please 'use' a session or 'connect' first.")
+                continue
+            if len(command) < 3:
+                print("adduac <targetname> <FLAG>")
+                continue
+            try:
+                modify_uac(current_session["conn"], current_session["base_dn"], command[1], command[2].upper(), "add")
+            except Exception as e:
+                print(f"[-] Error modifying UAC: {e}")
+        elif command[0] == "rmuac":
+            if not current_session:
+                print("No active session! Please 'use' a session or 'connect' first.")
+                continue
+            if len(command) < 3:
+                print("rmuac <targetname> <FLAG>")
+                continue
+            try:
+                modify_uac(current_session["conn"], current_session["base_dn"], command[1], command[2].upper(), "remove")
+            except Exception as e:
+                print(f"[-] Error modifying UAC: {e}")
         elif command[0] == "exit":
             break
         else:
