@@ -178,3 +178,20 @@ def get_sid(conn, base_dn, username):
     print(f"[bold yellow]  DN   : {entry.distinguishedName}[/bold yellow]")
     print(f"[bold green]  SID  : {sid_str}[/bold green]")
 
+def get_maq(conn, base_dn):
+    conn.search(search_base=base_dn, search_filter="(objectClass=domain)", attributes=["ms-DS-MachineAccountQuota"])
+
+    if not conn.entries:
+        print(f"[bold red][-]Could not retrieve MAQ[/bold red]")
+        return
+
+    entry = conn.entries[0]
+    if "ms-DS-MachineAccountQuota" in entry:
+        maq = int(entry["ms-DS-MachineAccountQuota"].value)
+        print(f"[bold cyan][+] Machine Account Quota (MAQ):[/bold cyan] [bold green]{maq}[/bold green]")
+        if maq > 0:
+            print("[bold yellow][!] Users can create machine accounts![/bold yellow]")
+        else:
+            print("[bold green][+] Machine account creation is restricted[/bold green]")
+    else:
+        print("[bold red][-] MAQ attribute not found[/bold red]")

@@ -17,7 +17,7 @@ if os.path.exists(histfile):
 atexit.register(readline.write_history_file, histfile)
 from src.structs import Session, Queue, DecisionNode, TreeNode, HistoryNode, SinglyLinkedList, SessionManager, BSTNode, UserCacheBST
 from src.utils import UAC_FLAGS, COMMANDS, shell_completer, show_menu, infer_netbios, domain_to_dn, check_connection, sid_to_string, save_password, resolve_sid, resolve_member_name
-from src.queries import batch_lookup, build_category_tree, print_categories, list_groups_bfs, list_users, list_computers, kerberoastable, get_sid
+from src.queries import batch_lookup, build_category_tree, print_categories, list_groups_bfs, list_users, list_computers, kerberoastable, get_sid, get_maq
 from src.add import add_member, add_computer, modify_uac, set_password
 from src.acls import cmd_setowner, cmd_genericall
 from src.auth import samr_set_password
@@ -591,8 +591,14 @@ def connect(connection):
                 print("ldap <ip>")
                 continue
             target_ip = command[1]
-
             get_domain_info(target_ip)
+        elif command[0] == "maq":
+            if not current_session:
+                print("No active session!")
+                continue
+
+            get_maq(current_session["conn"], current_session["base_dn"])
+
         elif command[0] == "exit":
             break
         else:
